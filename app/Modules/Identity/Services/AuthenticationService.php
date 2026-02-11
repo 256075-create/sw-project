@@ -120,6 +120,7 @@ class AuthenticationService implements IAuthenticationService
             'aud' => config('identity.jwt.audience'),
             'iat' => time(),
             'exp' => time() + (config('identity.jwt.access_token_ttl') * 60),
+            'jti' => Str::uuid()->toString(),
             'sub' => $user->user_id,
             'username' => $user->username,
             'roles' => $user->roles->pluck('role_name')->toArray(),

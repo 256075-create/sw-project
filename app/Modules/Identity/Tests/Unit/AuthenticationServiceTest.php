@@ -139,7 +139,6 @@ class AuthenticationServiceTest extends TestCase
         ]);
 
         $tokens = $this->authService->login('refreshuser', 'password123');
-        $this->travel(2)->seconds();
         $refreshed = $this->authService->refresh($tokens['refresh_token']);
 
         $this->assertArrayHasKey('access_token', $refreshed);
