@@ -83,7 +83,7 @@ jobs:
           DB_DATABASE: ums_test
           DB_USERNAME: root
           DB_PASSWORD: password
-          JWT_SECRET: test-jwt-secret-key
+          JWT_SECRET: ums-ci-test-jwt-secret-key-that-is-long-enough-for-hs256
           JWT_ALGO: HS256
 
       - name: Run feature tests
@@ -95,7 +95,7 @@ jobs:
           DB_DATABASE: ums_test
           DB_USERNAME: root
           DB_PASSWORD: password
-          JWT_SECRET: test-jwt-secret-key
+          JWT_SECRET: ums-ci-test-jwt-secret-key-that-is-long-enough-for-hs256
           JWT_ALGO: HS256
 
       - name: Run integration tests
@@ -107,7 +107,7 @@ jobs:
           DB_DATABASE: ums_test
           DB_USERNAME: root
           DB_PASSWORD: password
-          JWT_SECRET: test-jwt-secret-key
+          JWT_SECRET: ums-ci-test-jwt-secret-key-that-is-long-enough-for-hs256
           JWT_ALGO: HS256
 
       - name: Upload coverage to Codecov
