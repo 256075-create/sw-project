@@ -1,0 +1,145 @@
+services:
+  # ── Backend (PHP-FPM) ──
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: ums-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - ums-network
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env.docker
+
+  # ── Backend Nginx (API on port 8000) ──
+  nginx:
+    image: nginx:alpine
+    container_name: ums-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/sites:/etc/nginx/conf.d
+    networks:
+      - ums-network
+    depends_on:
+      - app
+
+  # ── Frontend (React on port 3000) ──
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    container_name: ums-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    networks:
+      - ums-network
+    depends_on:
+      - nginx
+
+  # ── MySQL ──
+  mysql:
+    image: mysql:8.0
+    container_name: ums-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ums_db
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_PASSWORD: secret
+      MYSQL_USER: ums_user
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf
+    ports:
+      - "3308:3306"
+    networks:
+      - ums-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──
+  redis:
+    image: redis:7-alpine
+    container_name: ums-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ums-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Elasticsearch ──
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: ums-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - ums-network
+
+  # ── Logstash ──
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: ums-logstash
+    restart: unless-stopped
+    volumes:
+      - ./docker/logstash/pipeline:/usr/share/logstash/pipeline
+      - ./docker/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./storage/logs:/var/www/storage/logs:ro
+    ports:
+      - "5044:5044"
+    environment:
+      LS_JAVA_OPTS: "-Xmx256m -Xms256m"
+    depends_on:
+      - elasticsearch
+    networks:
+      - ums-network
+
+  # ── Kibana ──
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: ums-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - ums-network
+
+networks:
+  ums-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  elasticsearch-data:

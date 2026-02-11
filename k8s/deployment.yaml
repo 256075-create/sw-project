@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ums-app
+  namespace: ums
+  labels:
+    app: ums-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ums-app
+  template:
+    metadata:
+      labels:
+        app: ums-app
+    spec:
+      containers:
+      - name: ums-app
+        image: your-registry/ums:latest
+        ports:
+        - containerPort: 9000
+        envFrom:
+        - configMapRef:
+            name: ums-config
+        env:
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: APP_KEY
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: DB_HOST
+        - name: DB_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: DB_DATABASE
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: DB_USERNAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: DB_PASSWORD
+        - name: REDIS_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: REDIS_HOST
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ums-secrets
+              key: JWT_SECRET
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /up
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /up
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ums-nginx
+  namespace: ums
+  labels:
+    app: ums-nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ums-nginx
+  template:
+    metadata:
+      labels:
+        app: ums-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: ums-nginx-config

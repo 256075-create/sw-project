@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ums-app-service
+  namespace: ums
+spec:
+  selector:
+    app: ums-app
+  ports:
+    - protocol: TCP
+      port: 9000
+      targetPort: 9000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ums-nginx-service
+  namespace: ums
+spec:
+  selector:
+    app: ums-nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer

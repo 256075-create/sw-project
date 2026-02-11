@@ -1,0 +1,2649 @@
+openapi: 3.0.3
+info:
+  title: University Management System (UMS) API
+  version: 1.0.0
+  description: |
+    REST API for the University Management System built with Laravel 11 (Modular Monolith).
+
+    ## Authentication
+    All endpoints (except Login and Refresh) require a JWT Bearer token in the `Authorization` header.
+
+    ## Roles & Permissions
+    - **Admin** — Full access (all 32 permissions)
+    - **Registration Staff** — Courses, sections, classrooms, student read, enrollment read
+    - **Student** — Enroll/drop, view courses/sections (filtered by department), timetable, academic read
+
+    ## Modules
+    - **Identity** — Authentication, users, roles, permissions
+    - **Academic** — Universities, colleges, departments, majors
+    - **Registration** — Courses, sections, classrooms, schedules
+    - **Student** — Students, enrollments, timetable
+  contact:
+    name: UMS Development Team
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication (login, refresh, logout)
+  - name: Users
+    description: User management (requires users.* permissions)
+  - name: Roles
+    description: Role & permission management (requires roles.* permissions)
+  - name: Universities
+    description: University CRUD (requires academic.* permissions)
+  - name: Colleges
+    description: College CRUD (requires academic.* permissions)
+  - name: Departments
+    description: Department CRUD (requires academic.* permissions)
+  - name: Majors
+    description: Major CRUD (requires academic.* permissions)
+  - name: Courses
+    description: Course CRUD (requires courses.* permissions)
+  - name: Sections
+    description: Section CRUD (requires sections.* permissions)
+  - name: Classrooms
+    description: Classroom CRUD (requires classrooms.* permissions)
+  - name: Schedules
+    description: Schedule management (requires sections.* permissions)
+  - name: Students
+    description: Student management (requires students.* permissions)
+  - name: Enrollments
+    description: Enrollment engine (requires enrollments.* permissions)
+  - name: Timetable
+    description: Student timetable (requires timetable.view permission)
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ============================================================
+  # AUTH
+  # ============================================================
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: Authenticate with username and password. Returns JWT access and refresh tokens.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  maxLength: 100
+                  example: admin
+                password:
+                  type: string
+                  minLength: 8
+                  example: Admin@123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: bearer
+                  expires_in:
+                    type: integer
+                    example: 900
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Account inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh token
+      description: Exchange a refresh token for new access and refresh tokens.
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  refresh_token:
+                    type: string
+                  token_type:
+                    type: string
+                  expires_in:
+                    type: integer
+        '401':
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      description: Revoke all refresh tokens for the current user.
+      operationId: logout
+      responses:
+        '200':
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================
+  # USERS
+  # ============================================================
+  /api/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      description: Returns the authenticated user's profile with roles and permissions.
+      operationId: me
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: "Permission required: `users.read`"
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/search'
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Users]
+      summary: Create user
+      description: "Permission required: `users.create`"
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password, password_confirmation]
+              properties:
+                username:
+                  type: string
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                  maxLength: 200
+                password:
+                  type: string
+                  minLength: 8
+                password_confirmation:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/users/{userId}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      description: "Permission required: `users.read`"
+      operationId: getUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Users]
+      summary: Update user
+      description: "Permission required: `users.update`"
+      operationId: updateUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                  maxLength: 200
+                password:
+                  type: string
+                  minLength: 8
+                is_active:
+                  type: boolean
+                mfa_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{userId}/roles:
+    post:
+      tags: [Users]
+      summary: Assign role to user
+      description: "Permission required: `users.update`"
+      operationId: assignRoleToUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_id]
+              properties:
+                role_id:
+                  type: integer
+                  example: 3
+      responses:
+        '200':
+          description: Role assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/users/{userId}/roles/{roleId}:
+    delete:
+      tags: [Users]
+      summary: Remove role from user
+      description: "Permission required: `users.update`"
+      operationId: removeRoleFromUser
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Role removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # ROLES
+  # ============================================================
+  /api/roles:
+    get:
+      tags: [Roles]
+      summary: List roles
+      description: "Permission required: `roles.read`"
+      operationId: listRoles
+      responses:
+        '200':
+          description: List of roles with permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RoleFull'
+    post:
+      tags: [Roles]
+      summary: Create role
+      description: "Permission required: `roles.create`"
+      operationId: createRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role_name]
+              properties:
+                role_name:
+                  type: string
+                  maxLength: 50
+                description:
+                  type: string
+                  maxLength: 255
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleFull'
+
+  /api/roles/{roleId}:
+    get:
+      tags: [Roles]
+      summary: Get role by ID
+      description: "Permission required: `roles.read`"
+      operationId: getRole
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleFull'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Roles]
+      summary: Update role
+      description: "Permission required: `roles.update`"
+      operationId: updateRole
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role_name:
+                  type: string
+                  maxLength: 50
+                description:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/RoleFull'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Roles]
+      summary: Delete role
+      description: "Permission required: `roles.delete`"
+      operationId: deleteRole
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Role deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/roles/{roleId}/permissions:
+    post:
+      tags: [Roles]
+      summary: Assign permission to role
+      description: "Permission required: `roles.update`"
+      operationId: assignPermissionToRole
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permission_id]
+              properties:
+                permission_id:
+                  type: integer
+      responses:
+        '200':
+          description: Permission assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/roles/{roleId}/permissions/{permissionId}:
+    delete:
+      tags: [Roles]
+      summary: Remove permission from role
+      description: "Permission required: `roles.update`"
+      operationId: removePermissionFromRole
+      parameters:
+        - name: roleId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: permissionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Permission removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # UNIVERSITIES
+  # ============================================================
+  /api/academic/hierarchy:
+    get:
+      tags: [Universities]
+      summary: Get full academic hierarchy
+      description: |
+        Returns the complete hierarchy tree: Universities > Colleges > Departments > Majors.
+        Permission required: `academic.read`
+      operationId: getAcademicHierarchy
+      responses:
+        '200':
+          description: Full hierarchy tree
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UniversityFull'
+
+  /api/universities:
+    get:
+      tags: [Universities]
+      summary: List universities
+      description: "Permission required: `academic.read`"
+      operationId: listUniversities
+      parameters:
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of universities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/University'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Universities]
+      summary: Create university
+      description: "Permission required: `academic.create`"
+      operationId: createUniversity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name:
+                  type: string
+                  maxLength: 200
+                  example: State University
+                code:
+                  type: string
+                  maxLength: 20
+                  example: SU
+      responses:
+        '201':
+          description: University created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/University'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/universities/{universityId}:
+    get:
+      tags: [Universities]
+      summary: Get university by ID
+      description: "Permission required: `academic.read`"
+      operationId: getUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: University details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/University'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Universities]
+      summary: Update university
+      description: "Permission required: `academic.update`"
+      operationId: updateUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+      responses:
+        '200':
+          description: University updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/University'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Universities]
+      summary: Delete university
+      description: "Permission required: `academic.delete`"
+      operationId: deleteUniversity
+      parameters:
+        - name: universityId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: University deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # COLLEGES
+  # ============================================================
+  /api/colleges:
+    get:
+      tags: [Colleges]
+      summary: List colleges
+      description: "Permission required: `academic.read`"
+      operationId: listColleges
+      parameters:
+        - name: university_id
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of colleges
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/College'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Colleges]
+      summary: Create college
+      description: "Permission required: `academic.create`"
+      operationId: createCollege
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [university_id, name, code]
+              properties:
+                university_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+      responses:
+        '201':
+          description: College created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/College'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/colleges/{collegeId}:
+    get:
+      tags: [Colleges]
+      summary: Get college by ID
+      description: "Permission required: `academic.read`"
+      operationId: getCollege
+      parameters:
+        - name: collegeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: College details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/College'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Colleges]
+      summary: Update college
+      description: "Permission required: `academic.update`"
+      operationId: updateCollege
+      parameters:
+        - name: collegeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                university_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+      responses:
+        '200':
+          description: College updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/College'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Colleges]
+      summary: Delete college
+      description: "Permission required: `academic.delete`"
+      operationId: deleteCollege
+      parameters:
+        - name: collegeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: College deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # DEPARTMENTS
+  # ============================================================
+  /api/departments:
+    get:
+      tags: [Departments]
+      summary: List departments
+      description: "Permission required: `academic.read`"
+      operationId: listDepartments
+      parameters:
+        - name: college_id
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of departments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Department'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Departments]
+      summary: Create department
+      description: "Permission required: `academic.create`"
+      operationId: createDepartment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [college_id, name, code]
+              properties:
+                college_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+      responses:
+        '201':
+          description: Department created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/departments/{departmentId}:
+    get:
+      tags: [Departments]
+      summary: Get department by ID
+      description: "Permission required: `academic.read`"
+      operationId: getDepartment
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Department details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Departments]
+      summary: Update department
+      description: "Permission required: `academic.update`"
+      operationId: updateDepartment
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                college_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+      responses:
+        '200':
+          description: Department updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Departments]
+      summary: Delete department
+      description: "Permission required: `academic.delete`"
+      operationId: deleteDepartment
+      parameters:
+        - name: departmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Department deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # MAJORS
+  # ============================================================
+  /api/majors:
+    get:
+      tags: [Majors]
+      summary: List majors
+      description: "Permission required: `academic.read`"
+      operationId: listMajors
+      parameters:
+        - name: department_id
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of majors
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Major'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Majors]
+      summary: Create major
+      description: "Permission required: `academic.create`"
+      operationId: createMajor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [department_id, name, code, total_credits]
+              properties:
+                department_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+                total_credits:
+                  type: integer
+                  minimum: 0
+      responses:
+        '201':
+          description: Major created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Major'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/majors/{majorId}:
+    get:
+      tags: [Majors]
+      summary: Get major by ID
+      description: "Permission required: `academic.read`"
+      operationId: getMajor
+      parameters:
+        - name: majorId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Major details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Major'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Majors]
+      summary: Update major
+      description: "Permission required: `academic.update`"
+      operationId: updateMajor
+      parameters:
+        - name: majorId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                department_id:
+                  type: integer
+                name:
+                  type: string
+                  maxLength: 200
+                code:
+                  type: string
+                  maxLength: 20
+                total_credits:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Major updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Major'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Majors]
+      summary: Delete major
+      description: "Permission required: `academic.delete`"
+      operationId: deleteMajor
+      parameters:
+        - name: majorId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Major deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # COURSES
+  # ============================================================
+  /api/courses:
+    get:
+      tags: [Courses]
+      summary: List courses
+      description: "Permission required: `courses.read`"
+      operationId: listCourses
+      parameters:
+        - $ref: '#/components/parameters/search'
+        - name: is_active
+          in: query
+          schema:
+            type: boolean
+        - name: course_code
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [name, course_code, credit_hours, created_at]
+        - name: sort_dir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Course'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Courses]
+      summary: Create course
+      description: "Permission required: `courses.create`"
+      operationId: createCourse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [course_code, name, credit_hours]
+              properties:
+                course_code:
+                  type: string
+                  maxLength: 20
+                  example: CS301
+                name:
+                  type: string
+                  maxLength: 200
+                  example: Data Structures
+                description:
+                  type: string
+                  nullable: true
+                credit_hours:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                department_id:
+                  type: integer
+                  nullable: true
+                  description: Department this course belongs to
+                is_active:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Course created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/courses/{courseId}:
+    get:
+      tags: [Courses]
+      summary: Get course by ID
+      description: "Permission required: `courses.read`"
+      operationId: getCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Courses]
+      summary: Update course
+      description: "Permission required: `courses.update`"
+      operationId: updateCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_code:
+                  type: string
+                  maxLength: 20
+                name:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                  nullable: true
+                credit_hours:
+                  type: integer
+                  minimum: 1
+                  maximum: 12
+                department_id:
+                  type: integer
+                  nullable: true
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Course updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Courses]
+      summary: Delete course
+      description: "Permission required: `courses.delete`"
+      operationId: deleteCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Course deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '422':
+          description: Course has active sections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/courses/{courseId}/activate:
+    post:
+      tags: [Courses]
+      summary: Activate course
+      description: "Permission required: `courses.update`"
+      operationId: activateCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Course activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+
+  /api/courses/{courseId}/deactivate:
+    post:
+      tags: [Courses]
+      summary: Deactivate course
+      description: "Permission required: `courses.update`"
+      operationId: deactivateCourse
+      parameters:
+        - name: courseId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Course deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Course'
+
+  # ============================================================
+  # SECTIONS
+  # ============================================================
+  /api/sections:
+    get:
+      tags: [Sections]
+      summary: List sections
+      description: "Permission required: `sections.read`"
+      operationId: listSections
+      parameters:
+        - name: course_id
+          in: query
+          schema:
+            type: integer
+        - name: semester
+          in: query
+          schema:
+            type: string
+        - name: academic_year
+          in: query
+          schema:
+            type: string
+        - name: instructor_name
+          in: query
+          schema:
+            type: string
+        - name: classroom_id
+          in: query
+          schema:
+            type: integer
+        - name: department_id
+          in: query
+          description: Filter sections by department (courses belonging to this department)
+          schema:
+            type: integer
+        - name: has_availability
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of sections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Section'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Sections]
+      summary: Create section
+      description: "Permission required: `sections.create`"
+      operationId: createSection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [course_id, classroom_id, section_number, instructor_name, max_capacity, semester, academic_year]
+              properties:
+                course_id:
+                  type: integer
+                classroom_id:
+                  type: integer
+                section_number:
+                  type: string
+                  maxLength: 20
+                  example: "001"
+                instructor_name:
+                  type: string
+                  maxLength: 200
+                  example: Dr. Smith
+                max_capacity:
+                  type: integer
+                  minimum: 1
+                semester:
+                  type: string
+                  maxLength: 20
+                  example: Fall
+                academic_year:
+                  type: string
+                  maxLength: 10
+                  example: "2025-2026"
+      responses:
+        '201':
+          description: Section created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/sections/{sectionId}:
+    get:
+      tags: [Sections]
+      summary: Get section by ID
+      description: "Permission required: `sections.read`. Includes schedules."
+      operationId: getSection
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Section details with schedules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Sections]
+      summary: Update section
+      description: "Permission required: `sections.update`"
+      operationId: updateSection
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                course_id:
+                  type: integer
+                classroom_id:
+                  type: integer
+                section_number:
+                  type: string
+                  maxLength: 20
+                instructor_name:
+                  type: string
+                  maxLength: 200
+                max_capacity:
+                  type: integer
+                  minimum: 1
+                semester:
+                  type: string
+                  maxLength: 20
+                academic_year:
+                  type: string
+                  maxLength: 10
+      responses:
+        '200':
+          description: Section updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Section'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Sections]
+      summary: Delete section
+      description: "Permission required: `sections.delete`"
+      operationId: deleteSection
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Section deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '422':
+          description: Section has active enrollments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================
+  # CLASSROOMS
+  # ============================================================
+  /api/classrooms:
+    get:
+      tags: [Classrooms]
+      summary: List classrooms
+      description: "Permission required: `classrooms.read`"
+      operationId: listClassrooms
+      parameters:
+        - name: building
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of classrooms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Classroom'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Classrooms]
+      summary: Create classroom
+      description: "Permission required: `classrooms.create`"
+      operationId: createClassroom
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [room_number, building, capacity]
+              properties:
+                room_number:
+                  type: string
+                  maxLength: 20
+                  example: "101"
+                building:
+                  type: string
+                  maxLength: 100
+                  example: Science Hall
+                capacity:
+                  type: integer
+                  minimum: 1
+                  example: 40
+      responses:
+        '201':
+          description: Classroom created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classroom'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/classrooms/{classroomId}:
+    get:
+      tags: [Classrooms]
+      summary: Get classroom by ID
+      description: "Permission required: `classrooms.read`"
+      operationId: getClassroom
+      parameters:
+        - name: classroomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Classroom details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classroom'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Classrooms]
+      summary: Update classroom
+      description: "Permission required: `classrooms.update`"
+      operationId: updateClassroom
+      parameters:
+        - name: classroomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                room_number:
+                  type: string
+                  maxLength: 20
+                building:
+                  type: string
+                  maxLength: 100
+                capacity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Classroom updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Classroom'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Classrooms]
+      summary: Delete classroom
+      description: "Permission required: `classrooms.delete`"
+      operationId: deleteClassroom
+      parameters:
+        - name: classroomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Classroom deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '422':
+          description: Classroom has active sections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================
+  # SCHEDULES
+  # ============================================================
+  /api/sections/{sectionId}/schedules:
+    get:
+      tags: [Schedules]
+      summary: List schedules for a section
+      description: "Permission required: `sections.read`"
+      operationId: listSchedules
+      parameters:
+        - name: sectionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of schedules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Schedule'
+
+  /api/schedules:
+    post:
+      tags: [Schedules]
+      summary: Create schedule
+      description: "Permission required: `sections.create`"
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [section_id, day_of_week, start_time, end_time]
+              properties:
+                section_id:
+                  type: integer
+                day_of_week:
+                  type: string
+                  enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+                start_time:
+                  type: string
+                  format: time
+                  example: "09:00"
+                end_time:
+                  type: string
+                  format: time
+                  example: "10:30"
+      responses:
+        '201':
+          description: Schedule created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/schedules/{scheduleId}:
+    get:
+      tags: [Schedules]
+      summary: Get schedule by ID
+      description: "Permission required: `sections.read`"
+      operationId: getSchedule
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Schedules]
+      summary: Update schedule
+      description: "Permission required: `sections.update`"
+      operationId: updateSchedule
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                day_of_week:
+                  type: string
+                  enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+                start_time:
+                  type: string
+                  format: time
+                end_time:
+                  type: string
+                  format: time
+      responses:
+        '200':
+          description: Schedule updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Schedules]
+      summary: Delete schedule
+      description: "Permission required: `sections.delete`"
+      operationId: deleteSchedule
+      parameters:
+        - name: scheduleId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Schedule deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+
+  # ============================================================
+  # STUDENTS
+  # ============================================================
+  /api/student/profile:
+    get:
+      tags: [Students]
+      summary: Get current student profile
+      description: Returns the student record linked to the authenticated user. No extra permission needed beyond authentication.
+      operationId: getStudentProfile
+      responses:
+        '200':
+          description: Student profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '404':
+          description: Student profile not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/students:
+    get:
+      tags: [Students]
+      summary: List students
+      description: "Permission required: `students.read`"
+      operationId: listStudents
+      parameters:
+        - $ref: '#/components/parameters/search'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive, graduated, suspended]
+        - name: major_id
+          in: query
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/per_page'
+      responses:
+        '200':
+          description: Paginated list of students
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Student'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+    post:
+      tags: [Students]
+      summary: Create student
+      description: "Permission required: `students.create`"
+      operationId: createStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [major_id, first_name, last_name, email]
+              properties:
+                major_id:
+                  type: integer
+                user_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: Link to an identity user account
+                student_number:
+                  type: string
+                  maxLength: 50
+                  nullable: true
+                  description: Auto-generated if not provided
+                first_name:
+                  type: string
+                  maxLength: 100
+                last_name:
+                  type: string
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                  maxLength: 200
+                enrollment_date:
+                  type: string
+                  format: date
+                  nullable: true
+                status:
+                  type: string
+                  enum: [active, inactive, graduated, suspended]
+                  default: active
+      responses:
+        '201':
+          description: Student created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/students/{studentId}:
+    get:
+      tags: [Students]
+      summary: Get student by ID
+      description: "Permission required: `students.read`"
+      operationId: getStudent
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Student details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Students]
+      summary: Update student
+      description: "Permission required: `students.update`"
+      operationId: updateStudent
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                major_id:
+                  type: integer
+                first_name:
+                  type: string
+                  maxLength: 100
+                last_name:
+                  type: string
+                  maxLength: 100
+                email:
+                  type: string
+                  format: email
+                  maxLength: 200
+                status:
+                  type: string
+                  enum: [active, inactive, graduated, suspended]
+      responses:
+        '200':
+          description: Student updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Student'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Students]
+      summary: Delete student
+      description: "Permission required: `students.delete`"
+      operationId: deleteStudent
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Student deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ============================================================
+  # ENROLLMENTS
+  # ============================================================
+  /api/students/{studentId}/enrollments:
+    get:
+      tags: [Enrollments]
+      summary: List student enrollments
+      description: "Permission required: `enrollments.read`"
+      operationId: listEnrollments
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [enrolled, dropped, completed]
+      responses:
+        '200':
+          description: List of enrollments with section details
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Enrollment'
+
+  /api/enrollments:
+    post:
+      tags: [Enrollments]
+      summary: Enroll student in section
+      description: |
+        Permission required: `enrollments.enroll`
+
+        Validates:
+        - Section has available capacity
+        - Student is not already enrolled in this section
+        - No schedule conflicts with existing enrollments
+      operationId: enrollStudent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [student_id, section_id]
+              properties:
+                student_id:
+                  type: integer
+                  example: 1
+                section_id:
+                  type: integer
+                  example: 1
+      responses:
+        '201':
+          description: Student enrolled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '409':
+          description: Duplicate enrollment or schedule conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Section full or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/enrollments/{enrollmentId}/drop:
+    post:
+      tags: [Enrollments]
+      summary: Drop enrollment
+      description: |
+        Permission required: `enrollments.drop`
+
+        Changes enrollment status to "dropped" and decrements section current_enrollment.
+      operationId: dropEnrollment
+      parameters:
+        - name: enrollmentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Enrollment dropped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Enrollment'
+        '422':
+          description: Enrollment cannot be dropped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================
+  # TIMETABLE
+  # ============================================================
+  /api/students/{studentId}/timetable:
+    get:
+      tags: [Timetable]
+      summary: Get student weekly timetable
+      description: |
+        Permission required: `timetable.view`
+
+        Returns a weekly view of the student's enrolled courses organized by day.
+      operationId: getStudentTimetable
+      parameters:
+        - name: studentId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Weekly timetable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      Monday:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimetableSlot'
+                      Tuesday:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimetableSlot'
+                      Wednesday:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimetableSlot'
+                      Thursday:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimetableSlot'
+                      Friday:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TimetableSlot'
+
+# ================================================================
+# COMPONENTS
+# ================================================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT access token obtained from POST /api/auth/login
+
+  parameters:
+    search:
+      name: search
+      in: query
+      description: Search keyword
+      schema:
+        type: string
+    per_page:
+      name: per_page
+      in: query
+      description: Items per page (default 15)
+      schema:
+        type: integer
+        default: 15
+
+  responses:
+    Unauthorized:
+      description: Authentication required or token expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Validation failed
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: The given data was invalid.
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items:
+                    type: string
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Resource not found
+
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        last_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        from:
+          type: integer
+          nullable: true
+        to:
+          type: integer
+          nullable: true
+
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        is_active:
+          type: boolean
+        mfa_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_login:
+          type: string
+          format: date-time
+          nullable: true
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            type: string
+          example: [users.read, courses.read]
+
+    Role:
+      type: object
+      properties:
+        role_id:
+          type: integer
+        role_name:
+          type: string
+
+    RoleFull:
+      type: object
+      properties:
+        role_id:
+          type: integer
+        role_name:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+
+    Permission:
+      type: object
+      properties:
+        permission_id:
+          type: integer
+        permission_name:
+          type: string
+        resource:
+          type: string
+        action:
+          type: string
+
+    University:
+      type: object
+      properties:
+        university_id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UniversityFull:
+      allOf:
+        - $ref: '#/components/schemas/University'
+        - type: object
+          properties:
+            colleges:
+              type: array
+              items:
+                allOf:
+                  - $ref: '#/components/schemas/College'
+                  - type: object
+                    properties:
+                      departments:
+                        type: array
+                        items:
+                          allOf:
+                            - $ref: '#/components/schemas/Department'
+                            - type: object
+                              properties:
+                                majors:
+                                  type: array
+                                  items:
+                                    $ref: '#/components/schemas/Major'
+
+    College:
+      type: object
+      properties:
+        college_id:
+          type: integer
+        university_id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Department:
+      type: object
+      properties:
+        department_id:
+          type: integer
+        college_id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Major:
+      type: object
+      properties:
+        major_id:
+          type: integer
+        department_id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        total_credits:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Course:
+      type: object
+      properties:
+        course_id:
+          type: integer
+        course_code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        credit_hours:
+          type: integer
+        department_id:
+          type: integer
+          nullable: true
+          description: Department this course belongs to
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Section:
+      type: object
+      properties:
+        section_id:
+          type: integer
+        course_id:
+          type: integer
+        classroom_id:
+          type: integer
+        section_number:
+          type: string
+        instructor_name:
+          type: string
+        max_capacity:
+          type: integer
+        current_enrollment:
+          type: integer
+        remaining_capacity:
+          type: integer
+        semester:
+          type: string
+        academic_year:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        course:
+          $ref: '#/components/schemas/Course'
+        classroom:
+          $ref: '#/components/schemas/Classroom'
+        schedules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Schedule'
+
+    Classroom:
+      type: object
+      properties:
+        classroom_id:
+          type: integer
+        room_number:
+          type: string
+        building:
+          type: string
+        capacity:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Schedule:
+      type: object
+      properties:
+        schedule_id:
+          type: integer
+        section_id:
+          type: integer
+        day_of_week:
+          type: string
+          enum: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+        start_time:
+          type: string
+          example: "09:00"
+        end_time:
+          type: string
+          example: "10:30"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Student:
+      type: object
+      properties:
+        student_id:
+          type: integer
+        student_number:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        full_name:
+          type: string
+        email:
+          type: string
+          format: email
+        major_id:
+          type: integer
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+        enrollment_date:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [active, inactive, graduated, suspended]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        major:
+          type: object
+          properties:
+            major_id:
+              type: integer
+            name:
+              type: string
+            code:
+              type: string
+            department:
+              type: object
+              properties:
+                department_id:
+                  type: integer
+                name:
+                  type: string
+                college:
+                  type: object
+                  properties:
+                    college_id:
+                      type: integer
+                    name:
+                      type: string
+
+    Enrollment:
+      type: object
+      properties:
+        enrollment_id:
+          type: integer
+        student_id:
+          type: integer
+        section_id:
+          type: integer
+        enrollment_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [enrolled, dropped, completed]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        section:
+          $ref: '#/components/schemas/Section'
+
+    TimetableSlot:
+      type: object
+      properties:
+        course_code:
+          type: string
+        course_name:
+          type: string
+        section_number:
+          type: string
+        instructor_name:
+          type: string
+        classroom:
+          type: string
+          description: "Building + Room number"
+        start_time:
+          type: string
+        end_time:
+          type: string

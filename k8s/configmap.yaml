@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ums-config
+  namespace: ums
+data:
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  APP_URL: "https://ums.example.com"
+  DB_CONNECTION: "mysql"
+  DB_PORT: "3306"
+  CACHE_STORE: "redis"
+  SESSION_DRIVER: "redis"
+  QUEUE_CONNECTION: "redis"
+  LOG_CHANNEL: "stack"
+  JWT_ALGO: "HS256"
+  JWT_ACCESS_TTL: "15"
+  JWT_REFRESH_TTL: "1440"
+  JWT_ISSUER: "ums-api"
+  JWT_AUDIENCE: "ums-client"

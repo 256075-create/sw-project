@@ -1,0 +1,14 @@
+output "resource_group_name" {
+  description = "The name of the resource group"
+  value       = azurerm_resource_group.ums.name
+}
+
+output "aks_cluster_name" {
+  description = "The name of the AKS cluster"
+  value       = azurerm_kubernetes_cluster.ums.name
+}
+
+output "mysql_server_name" {
+  description = "The name of the MySQL server"
+  value       = azurerm_mysql_flexible_server.ums.name
+}

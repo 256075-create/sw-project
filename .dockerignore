@@ -1,0 +1,16 @@
+node_modules
+vendor
+.git
+.env
+.env.backup
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+frontend/node_modules
+frontend/dist
+*.log
+.idea
+.vscode
+.DS_Store
