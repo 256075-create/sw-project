@@ -41,8 +41,8 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
-          extensions: mbstring, pdo, pdo_mysql, redis, bcmath, gd
+          php-version: '8.4'
+          extensions: mbstring, pdo, pdo_mysql, redis, bcmath, gd, intl
           coverage: xdebug
 
       - name: Cache Composer dependencies
@@ -126,7 +126,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
