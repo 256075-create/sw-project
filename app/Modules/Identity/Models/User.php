@@ -2,6 +2,7 @@
 
 namespace App\Modules\Identity\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class User extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     protected $table = 'identity_users';
     protected $primaryKey = 'user_id';
@@ -45,6 +46,11 @@ class User extends Model
     public function uniqueIds(): array
     {
         return ['user_id'];
+    }
+
+    protected static function newFactory()
+    {
+        return \App\Modules\Identity\Database\Factories\UserFactory::new();
     }
 
     public function roles(): BelongsToMany
