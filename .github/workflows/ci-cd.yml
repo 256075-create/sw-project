@@ -138,6 +138,9 @@ jobs:
     needs: [test, lint]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    permissions:
+      packages: write
+      contents: read
 
     steps:
       - name: Checkout code
