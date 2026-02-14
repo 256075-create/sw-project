@@ -5,7 +5,7 @@ echo "==> UMS Backend Starting..."
 
 # Wait for MySQL to be ready
 echo "==> Waiting for MySQL..."
-while ! php -r "try { new PDO('mysql:host=${DB_HOST};port=3306', '${DB_USERNAME}', '${DB_PASSWORD}'); echo 'ok'; } catch (Exception \$e) { exit(1); }" 2>/dev/null; do
+while ! php -r "try { new PDO('mysql:host=${DB_HOST};port=3306', '${DB_USERNAME}', '${DB_PASSWORD}', [PDO::MYSQL_ATTR_SSL_CA => '${MYSQL_ATTR_SSL_CA:-}']); echo 'ok'; } catch (Exception \$e) { exit(1); }" 2>/dev/null; do
     sleep 2
 done
 echo "==> MySQL is ready!"
