@@ -86,8 +86,7 @@ spec:
           mountPath: /var/www/storage/logs
       volumes:
       - name: laravel-logs
-        persistentVolumeClaim:
-          claimName: laravel-logs
+        emptyDir: {}
 ---
 apiVersion: apps/v1
 kind: Deployment

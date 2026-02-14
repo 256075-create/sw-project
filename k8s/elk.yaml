@@ -12,20 +12,6 @@ spec:
       storage: 10Gi
   storageClassName: managed-csi
 ---
-# ── PVC for shared Laravel logs (Azure Files, RWX) ──
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: laravel-logs
-  namespace: ums
-spec:
-  accessModes:
-    - ReadWriteMany
-  resources:
-    requests:
-      storage: 5Gi
-  storageClassName: azurefile-csi
----
 # ── ConfigMap for Logstash pipeline ──
 apiVersion: v1
 kind: ConfigMap
@@ -229,8 +215,7 @@ spec:
         configMap:
           name: logstash-config
       - name: laravel-logs
-        persistentVolumeClaim:
-          claimName: laravel-logs
+        emptyDir: {}
 ---
 # ── Kibana Deployment ──
 apiVersion: apps/v1
