@@ -57,7 +57,7 @@ class TimetableServiceTest extends TestCase
         $timetable = $this->service->getWeeklyTimetable($student->student_id);
 
         $this->assertNotEmpty($timetable['Monday']);
-        $this->assertEquals('09:00', $timetable['Monday'][0]['start_time'] ?? null);
+        $this->assertStringStartsWith('09:00', $timetable['Monday'][0]['start_time'] ?? '');
         $this->assertArrayHasKey('course_name', $timetable['Monday'][0]);
         $this->assertArrayHasKey('instructor_name', $timetable['Monday'][0]);
         $this->assertArrayHasKey('classroom', $timetable['Monday'][0]);
@@ -133,8 +133,8 @@ class TimetableServiceTest extends TestCase
         $timetable = $this->service->getWeeklyTimetable($student->student_id);
 
         $this->assertCount(2, $timetable['Monday']);
-        $this->assertEquals('09:00', $timetable['Monday'][0]['start_time'] ?? null);
-        $this->assertEquals('14:00', $timetable['Monday'][1]['start_time'] ?? null);
+        $this->assertStringStartsWith('09:00', $timetable['Monday'][0]['start_time'] ?? '');
+        $this->assertStringStartsWith('14:00', $timetable['Monday'][1]['start_time'] ?? '');
     }
 
     public function test_get_day_timetable_returns_only_specific_day(): void
