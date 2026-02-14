@@ -102,41 +102,6 @@ class EnrollmentService implements IEnrollmentService
 
     public function getStudentTimetable(int $studentId): array
     {
-        $enrollments = $this->enrollmentRepository->getActiveEnrollmentsWithSchedules($studentId);
-
-        $timetable = [];
-        $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-        foreach ($days as $day) {
-            $timetable[$day] = [];
-        }
-
-        foreach ($enrollments as $enrollment) {
-            if (!$enrollment->section || !$enrollment->section->schedules) {
-                continue;
-            }
-
-            foreach ($enrollment->section->schedules as $schedule) {
-                $timetable[$schedule->day_of_week][] = [
-                    'enrollment_id' => $enrollment->enrollment_id,
-                    'course_name' => $enrollment->section->course->name ?? '',
-                    'course_code' => $enrollment->section->course->course_code ?? '',
-                    'section_number' => $enrollment->section->section_number,
-                    'instructor_name' => $enrollment->section->instructor_name,
-                    'classroom' => $enrollment->section->classroom
-                        ? $enrollment->section->classroom->building . ' ' . $enrollment->section->classroom->room_number
-                        : '',
-                    'start_time' => $schedule->start_time,
-                    'end_time' => $schedule->end_time,
-                ];
-            }
-        }
-
-        // Sort each day by start time
-        foreach ($timetable as $day => &$slots) {
-            usort($slots, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
-        }
-
-        return $timetable;
+        return app(TimetableService::class)->getWeeklyTimetable($studentId);
     }
 }

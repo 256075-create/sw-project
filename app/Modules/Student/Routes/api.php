@@ -27,6 +27,9 @@ Route::prefix('api')->middleware('jwt.auth')->group(function () {
         ->post('/enrollments/{enrollmentId}/drop', [EnrollmentController::class, 'drop']);
 
     // Timetable
-    Route::middleware('permission:timetable.view')
-        ->get('/students/{studentId}/timetable', [TimetableController::class, 'show']);
+    Route::middleware('permission:timetable.view')->group(function () {
+        Route::get('/students/{studentId}/timetable', [TimetableController::class, 'show']);
+        Route::get('/students/{studentId}/timetable/{dayOfWeek}', [TimetableController::class, 'day']);
+        Route::get('/students/{studentId}/timetable-export', [TimetableController::class, 'export']);
+    });
 });
