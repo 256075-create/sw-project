@@ -6,7 +6,7 @@ metadata:
 data:
   APP_ENV: "production"
   APP_DEBUG: "false"
-  APP_URL: "https://ums.example.com"
+  APP_URL: "http://ums.francecentral.cloudapp.azure.com"
   DB_CONNECTION: "mysql"
   DB_PORT: "3306"
   MYSQL_ATTR_SSL_CA: "/etc/ssl/certs/ca-certificates.crt"
