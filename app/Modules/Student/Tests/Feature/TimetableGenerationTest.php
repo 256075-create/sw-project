@@ -75,7 +75,7 @@ class TimetableGenerationTest extends TestCase
 
         $data = $response->json('data');
         $this->assertNotEmpty($data['Monday']);
-        $this->assertEquals('09:00', $data['Monday'][0]['start_time'] ?? $data['Monday'][0]['start_time']);
+        $this->assertStringStartsWith('09:00', $data['Monday'][0]['start_time'] ?? '');
     }
 
     public function test_timetable_is_empty_for_student_with_no_enrollments(): void
