@@ -28,17 +28,6 @@ mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage
 chmod -R 775 storage bootstrap/cache
 chown -R www-data:www-data storage bootstrap/cache
 
-# Run migrations
-echo "==> Running migrations..."
-php artisan migrate --force
-
-# Seed database if tables are empty
-USERS_COUNT=$(php artisan tinker --execute="echo \App\Modules\Identity\Models\User::count();" 2>/dev/null | grep -E '^[0-9]+$' || echo "0")
-if [ "$USERS_COUNT" = "0" ]; then
-    echo "==> Seeding database..."
-    php artisan db:seed --force
-fi
-
 # Clear and cache config
 echo "==> Caching configuration..."
 php artisan config:clear

@@ -1,0 +1,292 @@
+# ── PersistentVolumeClaim for Elasticsearch data ──
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-data
+  namespace: ums
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: managed-csi
+---
+# ── PVC for shared Laravel logs (Azure Files, RWX) ──
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: laravel-logs
+  namespace: ums
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: azurefile-csi
+---
+# ── ConfigMap for Logstash pipeline ──
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: ums
+data:
+  logstash.conf: |
+    input {
+      file {
+        path => "/var/www/storage/logs/laravel.log"
+        start_position => "beginning"
+        sincedb_path => "/usr/share/logstash/data/sincedb"
+        codec => multiline {
+          pattern => "^\[%{TIMESTAMP_ISO8601}\]"
+          negate => true
+          what => "previous"
+        }
+        type => "laravel"
+      }
+    }
+    filter {
+      if [type] == "laravel" {
+        grok {
+          match => {
+            "message" => "\[%{TIMESTAMP_ISO8601:timestamp}\] %{DATA:env}\.%{DATA:level}: %{GREEDYDATA:log_message}"
+          }
+        }
+        date {
+          match => ["timestamp", "yyyy-MM-dd HH:mm:ss", "ISO8601"]
+          target => "@timestamp"
+        }
+        mutate { remove_field => ["timestamp"] }
+      }
+    }
+    output {
+      elasticsearch {
+        hosts => ["http://elasticsearch-service:9200"]
+        index => "ums-laravel-logs-%{+YYYY.MM.dd}"
+      }
+    }
+---
+# ── ConfigMap for Logstash settings ──
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: ums
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    xpack.monitoring.enabled: false
+---
+# ── Elasticsearch StatefulSet ──
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: ums
+  labels:
+    app: elasticsearch
+spec:
+  serviceName: elasticsearch-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.35
+        command: ["sh", "-c", "chown -R 1000:1000 /usr/share/elasticsearch/data"]
+        volumeMounts:
+        - name: elasticsearch-data
+          mountPath: /usr/share/elasticsearch/data
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        ports:
+        - containerPort: 9200
+          name: http
+        - containerPort: 9300
+          name: transport
+        env:
+        - name: discovery.type
+          value: single-node
+        - name: ES_JAVA_OPTS
+          value: "-Xms512m -Xmx512m"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: cluster.name
+          value: "ums-cluster"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "1.5Gi"
+            cpu: "500m"
+        volumeMounts:
+        - name: elasticsearch-data
+          mountPath: /usr/share/elasticsearch/data
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health?wait_for_status=yellow&timeout=5s
+            port: 9200
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 20
+      volumes:
+      - name: elasticsearch-data
+        persistentVolumeClaim:
+          claimName: elasticsearch-data
+---
+# ── Elasticsearch Service (ClusterIP) ──
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  namespace: ums
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - name: http
+    port: 9200
+    targetPort: 9200
+  - name: transport
+    port: 9300
+    targetPort: 9300
+  type: ClusterIP
+---
+# ── Elasticsearch Headless Service ──
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: ums
+spec:
+  clusterIP: None
+  selector:
+    app: elasticsearch
+  ports:
+  - port: 9200
+---
+# ── Logstash Deployment ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: ums
+  labels:
+    app: logstash
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+      - name: logstash
+        image: docker.elastic.co/logstash/logstash:8.11.0
+        env:
+        - name: LS_JAVA_OPTS
+          value: "-Xmx256m -Xms256m"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "768Mi"
+            cpu: "400m"
+        volumeMounts:
+        - name: pipeline
+          mountPath: /usr/share/logstash/pipeline
+        - name: logstash-config
+          mountPath: /usr/share/logstash/config/logstash.yml
+          subPath: logstash.yml
+        - name: laravel-logs
+          mountPath: /var/www/storage/logs
+          readOnly: true
+      volumes:
+      - name: pipeline
+        configMap:
+          name: logstash-pipeline
+      - name: logstash-config
+        configMap:
+          name: logstash-config
+      - name: laravel-logs
+        persistentVolumeClaim:
+          claimName: laravel-logs
+---
+# ── Kibana Deployment ──
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: ums
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:8.11.0
+        ports:
+        - containerPort: 5601
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch-service:9200"
+        - name: SERVER_BASEPATH
+          value: "/kibana"
+        - name: SERVER_REWRITEBASEPATH
+          value: "true"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        readinessProbe:
+          httpGet:
+            path: /kibana/api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          failureThreshold: 10
+---
+# ── Kibana Service ──
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-service
+  namespace: ums
+spec:
+  selector:
+    app: kibana
+  ports:
+  - port: 5601
+    targetPort: 5601
+  type: ClusterIP

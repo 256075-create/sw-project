@@ -12,9 +12,54 @@ data:
   CACHE_STORE: "redis"
   SESSION_DRIVER: "redis"
   QUEUE_CONNECTION: "redis"
+  REDIS_PORT: "6380"
+  REDIS_SCHEME: "tls"
   LOG_CHANNEL: "stack"
+  ELASTICSEARCH_HOST: "elasticsearch-service"
+  ELASTICSEARCH_PORT: "9200"
   JWT_ALGO: "HS256"
   JWT_ACCESS_TTL: "15"
   JWT_REFRESH_TTL: "1440"
   JWT_ISSUER: "ums-api"
   JWT_AUDIENCE: "ums-client"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ums-nginx-config
+  namespace: ums
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /var/www/public;
+        index index.php;
+        charset utf-8;
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        location = /favicon.ico { access_log off; log_not_found off; }
+        location = /robots.txt  { access_log off; log_not_found off; }
+
+        error_page 404 /index.php;
+
+        location ~ \.php$ {
+            fastcgi_pass ums-app-service:9000;
+            fastcgi_param SCRIPT_FILENAME /var/www/public/index.php;
+            include fastcgi_params;
+            fastcgi_hide_header X-Powered-By;
+        }
+
+        location ~ /\.(?!well-known).* {
+            deny all;
+        }
+
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+    }
