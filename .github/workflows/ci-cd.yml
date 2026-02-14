@@ -201,12 +201,30 @@ jobs:
           resource-group: ums-rg
           cluster-name: ums-aks
 
+      - name: Setup namespace and secrets
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          envsubst < k8s/secrets.yaml | kubectl apply -f -
+          envsubst < k8s/configmap.yaml | kubectl apply -f -
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ELASTICSEARCH_HOST: ${{ secrets.ELASTICSEARCH_HOST }}
+
       - name: Run database migration
         run: |
           export IMAGE_TAG=${{ github.sha }}
           envsubst < k8s/migration-job.yaml | kubectl apply -f -
           kubectl wait --for=condition=complete --timeout=300s -n ums job/ums-migrate-${IMAGE_TAG}
         env:
+          IMAGE_TAG: ${{ github.sha }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_DATABASE: ${{ secrets.DB_DATABASE }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
@@ -221,25 +239,14 @@ jobs:
       - name: Deploy to AKS
         run: |
           export IMAGE_TAG=${{ github.sha }}
-          kubectl apply -f k8s/namespace.yaml
-          envsubst < k8s/secrets.yaml | kubectl apply -f -
-          envsubst < k8s/configmap.yaml | kubectl apply -f -
           kubectl apply -f k8s/elk.yaml
           envsubst < k8s/deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml
           kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/cert-manager-issuer.yaml
         env:
-          APP_KEY: ${{ secrets.APP_KEY }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_DATABASE: ${{ secrets.DB_DATABASE }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          REDIS_PORT: ${{ secrets.REDIS_PORT }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ELASTICSEARCH_HOST: ${{ secrets.ELASTICSEARCH_HOST }}
+          IMAGE_TAG: ${{ github.sha }}
 
       - name: Wait for rollout
         run: |
@@ -276,12 +283,30 @@ jobs:
           resource-group: ums-rg
           cluster-name: ums-aks
 
+      - name: Setup namespace and secrets
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          envsubst < k8s/secrets.yaml | kubectl apply -f -
+          envsubst < k8s/configmap.yaml | kubectl apply -f -
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          REDIS_HOST: ${{ secrets.REDIS_HOST }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          REDIS_PORT: ${{ secrets.REDIS_PORT }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ELASTICSEARCH_HOST: ${{ secrets.ELASTICSEARCH_HOST }}
+
       - name: Run database migration
         run: |
           export IMAGE_TAG=${{ github.sha }}
           envsubst < k8s/migration-job.yaml | kubectl apply -f -
           kubectl wait --for=condition=complete --timeout=300s -n ums job/ums-migrate-${IMAGE_TAG}
         env:
+          IMAGE_TAG: ${{ github.sha }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_DATABASE: ${{ secrets.DB_DATABASE }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
@@ -296,25 +321,14 @@ jobs:
       - name: Deploy to AKS
         run: |
           export IMAGE_TAG=${{ github.sha }}
-          kubectl apply -f k8s/namespace.yaml
-          envsubst < k8s/secrets.yaml | kubectl apply -f -
-          envsubst < k8s/configmap.yaml | kubectl apply -f -
           kubectl apply -f k8s/elk.yaml
           envsubst < k8s/deployment.yaml | kubectl apply -f -
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml
           kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/cert-manager-issuer.yaml
         env:
-          APP_KEY: ${{ secrets.APP_KEY }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_DATABASE: ${{ secrets.DB_DATABASE }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          REDIS_HOST: ${{ secrets.REDIS_HOST }}
-          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-          REDIS_PORT: ${{ secrets.REDIS_PORT }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          ELASTICSEARCH_HOST: ${{ secrets.ELASTICSEARCH_HOST }}
+          IMAGE_TAG: ${{ github.sha }}
 
       - name: Wait for rollout
         run: |
