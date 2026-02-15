@@ -13,8 +13,12 @@ class ElasticsearchService
     protected function getClient(): Client
     {
         if ($this->client === null) {
+            $host = config('identity.elasticsearch.host', 'localhost:9200');
+            if (!str_starts_with($host, 'http')) {
+                $host = 'http://' . $host;
+            }
             $this->client = ClientBuilder::create()
-                ->setHosts([config('identity.elasticsearch.host', 'localhost:9200')])
+                ->setHosts([$host])
                 ->build();
         }
 
