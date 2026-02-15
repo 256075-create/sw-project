@@ -6,6 +6,4 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/api/docs', function () {
-    return response()->file(public_path('docs/index.html'));
-});
+// API docs available at /docs/api (powered by Scramble)
